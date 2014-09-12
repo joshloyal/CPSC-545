@@ -53,6 +53,36 @@ void free_matrix(Matrix* M) {
     free(M);
 }
 
+Matrix* multiply_matrix(Matrix* A, Matrix* B) {
+    unsigned int n, m, p;
+    double sum;
+    Matrix* C;
+    
+    if( A->cols != B->rows ) {
+        printf("Dimension mismatch when multiplying matrices!\n", stderr);
+        return NULL;
+    }
+
+    n = A->rows;
+    m = A->cols;
+    p = B->cols; 
+    C = new_matrix(n,p);
+    if( C != NULL ) {
+        unsigned int i,j,k; 
+        for(i = 0; i < n; i++) {
+            for(j = 0; j < p; j++) {
+                sum = 0;
+                for(k = 0; k < m; k++) {
+                    sum = sum + A->A[i][k] * B->A[k][j];
+                }
+                C->A[i][j] = sum;
+            }
+        }
+    }
+    
+    return C;
+}
+
 void print_matrix(Matrix* m) {
     int i, j;
     for(i = 0; i < m->rows; i++ ) {
@@ -65,21 +95,35 @@ void print_matrix(Matrix* m) {
     printf("\n");
 }
 
+/* Test Functions */
+void test_multi() {
+    Matrix* A;
+    Matrix* B;
+    Matrix* C;
+
+    A = new_matrix(2,2);
+    B = new_matrix(2,3);
+
+    A->A[0][0] = 1;
+    A->A[0][1] = 2;
+    A->A[1][0] = 3;
+    A->A[1][1] = 4;
+
+    B->A[0][0] = 5;
+    B->A[0][1] = 6;
+    B->A[0][2] = 7;
+    B->A[1][0] = 8;
+    B->A[1][1] = 9;
+    B->A[1][2] = 10;
+
+    C = multiply_matrix(A,B);
+
+    print_matrix(C); 
+
+    free_matrix(A); free_matrix(B); free_matrix(C);
+}
+
 int main(int argc, char *argv[]) {
-    int i,j;
-    int size = 3;
-    Matrix* a;
-
-    a = new_matrix(size,size);
-    for(i = 0; i < size; i++ ) {
-        for(j = 0; j < size; j++ ) {
-            a->A[i][j] = (float)rand() / RAND_MAX;
-        }
-    }
-
-    print_matrix(a);
-    
-    free_matrix(a);
-
+    test_multi();
     return 0;
 }
