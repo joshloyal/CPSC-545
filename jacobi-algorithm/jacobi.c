@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Matrix Structure :
- *      Allows one to access elements via M->A[i][j] while hiding
- *      the implementation of storing the numbers in a single contigent
- *      row-major ordered array.
- */
+//-----------------------------------------------------------------------
+//  Matrix Structure :
+//      Allows one to access elements via M->A[i][j] while hiding
+//      the implementation of storing the numbers in a single contigent
+//      row-major ordered array.
+//-----------------------------------------------------------------------
 struct Matrix {
     
     unsigned int rows, cols; // row and column dimensions of the matrix
@@ -14,6 +15,30 @@ struct Matrix {
 };
 typedef struct Matrix Matrix;
 
+//-----------------------------------------------------------------------
+//      Pre declarations of matrix functions
+//-----------------------------------------------------------------------
+Matrix* new_matrix(unsigned int rows, unsigned int cols);
+void free_matrix(Matrix* M); 
+Matrix* multiply_matrix(Matrix* A, Matrix* B);
+void print_matrix(Matrix* m);
+
+//-----------------------------------------------------------------------
+//      Pre declarations of test functions
+//-----------------------------------------------------------------------
+void test_multi();
+
+//-----------------------------------------------------------------------
+//      Main funciton
+//-----------------------------------------------------------------------
+int main(int argc, char *argv[]) {
+    test_multi();
+    return 0;
+}
+
+//-----------------------------------------------------------------------
+//      Implementation of matrix funciton
+//-----------------------------------------------------------------------
 Matrix* new_matrix(unsigned int rows, unsigned int cols) {
     Matrix* M;
     int i;
@@ -47,12 +72,14 @@ Matrix* new_matrix(unsigned int rows, unsigned int cols) {
     return M;
 }
 
+//-----------------------------------------------------------------------
 void free_matrix(Matrix* M) {
     free(M->A);
     free(M->raw);
     free(M);
 }
 
+//-----------------------------------------------------------------------
 Matrix* multiply_matrix(Matrix* A, Matrix* B) {
     unsigned int n, m, p;
     double sum;
@@ -83,6 +110,7 @@ Matrix* multiply_matrix(Matrix* A, Matrix* B) {
     return C;
 }
 
+//-----------------------------------------------------------------------
 void print_matrix(Matrix* m) {
     int i, j;
     for(i = 0; i < m->rows; i++ ) {
@@ -95,7 +123,9 @@ void print_matrix(Matrix* m) {
     printf("\n");
 }
 
-/* Test Functions */
+//-----------------------------------------------------------------------
+//     Implementation of test functions 
+//-----------------------------------------------------------------------
 void test_multi() {
     Matrix* A;
     Matrix* B;
@@ -121,9 +151,4 @@ void test_multi() {
     print_matrix(C); 
 
     free_matrix(A); free_matrix(B); free_matrix(C);
-}
-
-int main(int argc, char *argv[]) {
-    test_multi();
-    return 0;
 }
