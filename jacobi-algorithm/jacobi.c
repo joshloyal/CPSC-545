@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,23 +17,46 @@ struct Matrix {
 typedef struct Matrix Matrix;
 
 //-----------------------------------------------------------------------
+//  Jacobi Structure :
+//      Hold jacobi rotation parameters
+//-----------------------------------------------------------------------
+struct Jacobi {
+    double t;   // tangent
+    double c;   // cosine 
+    double s;   // sine
+};
+typedef struct Jacobi Jacobi;
+
+
+//-----------------------------------------------------------------------
 //      Pre declarations of matrix functions
 //-----------------------------------------------------------------------
 Matrix* new_matrix(unsigned int rows, unsigned int cols);
 void free_matrix(Matrix* M); 
 Matrix* multiply_matrix(Matrix* A, Matrix* B);
+Matrix* transpose(Matrix* M);
+Jacobi jacobi_rotation(double a_pp, double a_pq, double a_qq);
 void print_matrix(Matrix* m);
+
+//-----------------------------------------------------------------------
+//      Pre declarations of utility functions
+//-----------------------------------------------------------------------
+double sign(double val);
 
 //-----------------------------------------------------------------------
 //      Pre declarations of test functions
 //-----------------------------------------------------------------------
 void test_multi();
+void test_trans();
+void test_jac_rot();
 
 //-----------------------------------------------------------------------
 //      Main funciton
 //-----------------------------------------------------------------------
 int main(int argc, char *argv[]) {
     test_multi();
+    test_trans();
+    test_jac_rot();
     return 0;
 }
 
@@ -110,6 +134,51 @@ Matrix* multiply_matrix(Matrix* A, Matrix* B) {
     return C;
 }
 
+/* just invert coordinates... */
+Matrix* transpose(Matrix* M) {
+    unsigned int rows, cols;
+    Matrix* Mt;
+
+    rows = M->rows;
+    cols = M->cols;
+    Mt = new_matrix(cols, rows); // flip rows and cols
+
+    if ( Mt != NULL ) {
+        unsigned int i, j;
+        for (i = 0; i < rows; i++) {
+            for (j = 0; j < cols; j++) {
+                Mt->A[j][i] = M->A[i][j];
+            }
+        }
+    }
+
+    return Mt;
+}
+
+//-----------------------------------------------------------------------
+Jacobi jacobi_rotation(double a_pp, double a_pq, double a_qq) {
+    Jacobi jac = {0., 0., 0.};
+
+    double t = (a_qq - a_pp) / (2. * a_pq);
+    jac.t = sign(t) / ( fabs(t) + sqrt(1 + t*t) );
+    jac.c = 1 / sqrt(1 + jac.t*jac.t);
+    jac.s = jac.c * jac.t;
+
+    return jac;
+}
+
+//-----------------------------------------------------------------------
+double sign(double val) {
+    if ( val < 0 ) {
+        return -1;
+    }
+    return 1;
+}
+
+//-----------------------------------------------------------------------
+void rotate(Matrix* M) {
+}
+
 //-----------------------------------------------------------------------
 void print_matrix(Matrix* m) {
     int i, j;
@@ -127,6 +196,9 @@ void print_matrix(Matrix* m) {
 //     Implementation of test functions 
 //-----------------------------------------------------------------------
 void test_multi() {
+    printf("//------------------------------------------------------------------\n");
+    printf("Testing Matrix Multiplication\n");
+    printf("//------------------------------------------------------------------\n");
     Matrix* A;
     Matrix* B;
     Matrix* C;
@@ -151,4 +223,39 @@ void test_multi() {
     print_matrix(C); 
 
     free_matrix(A); free_matrix(B); free_matrix(C);
+}
+
+void test_trans() {
+    printf("//------------------------------------------------------------------\n");
+    printf("Testing Transpose\n");
+    printf("//------------------------------------------------------------------\n");
+    
+    Matrix* M;
+    Matrix* Mt;
+
+    M = new_matrix(3,3);
+    
+    M->A[0][0] = 5;
+    M->A[0][1] = 6;
+    M->A[0][2] = 7;
+    M->A[1][0] = 8;
+    M->A[1][1] = 9;
+    M->A[1][2] = 10;
+    M->A[2][0] = 10;
+    M->A[2][1] = 11;
+    M->A[2][2] = 12;
+
+    Mt = transpose(M);
+    print_matrix(M);
+    print_matrix(Mt);
+
+    free_matrix(M); free_matrix(Mt);
+}
+
+void test_jac_rot() {
+    printf("//------------------------------------------------------------------\n");
+    printf("Testing Jacobi rotation\n");
+    printf("//------------------------------------------------------------------\n");
+    Jacobi jac = jacobi_rotation(2,4,3);
+    printf("t = %f, s = %f, c = %f\n", jac.t, jac.s, jac.c);
 }
