@@ -165,6 +165,73 @@ void jacobi(double* a, int n, double* s, double* u, double* v) {
 }
 
 //-----------------------------------------------------------------------
+//      Implementation of jacobi-algorithm funciton
+//-----------------------------------------------------------------------
+jacobi_param jacobi_parameters(double a_pp, double a_pq, double a_qq) {
+    jacobi_param jac = {0., 0., 0.};
+
+    double t = (a_pp - a_qq) / (2. * a_pq);
+    jac.t = sign(t) / ( fabs(t) + sqrt(1 + t*t) );
+    jac.c = 1 / sqrt(1 + jac.t*jac.t);
+    jac.s = (jac.c * jac.t);
+
+    return jac;
+}
+
+//-----------------------------------------------------------------------
+void rotate(matrix* L, unsigned int p, unsigned int q, matrix* R) {
+    // compute the jacobi rotation parameters
+    double u_pp = sum_entry(L, p, p);
+    double u_pq = sum_entry(L, p, q);
+    double u_qq = sum_entry(L, q, q);
+    jacobi_param jac = jacobi_parameters(u_pp, u_pq, u_qq);
+
+    // update columns p and q of M,U
+    int k; double temp;
+    for(k = 0; k < L->rows; k++)
+    {
+        temp = L->A[k][p];
+        L->A[k][p] = jac.s * L->A[k][q] + jac.c * temp;
+        L->A[k][q] = jac.c * L->A[k][q] - jac.s * temp;
+
+        temp = R->A[k][p];
+        R->A[k][p] = jac.s * R->A[k][q] + jac.c * temp;
+        R->A[k][q] = jac.c * R->A[k][q] - jac.s * temp;
+
+    }
+}
+
+//-----------------------------------------------------------------------
+singular_value* singular_values(matrix* L) {
+    unsigned int n = L->rows;
+    singular_value* sing_val = malloc(sizeof(singular_value) * n);
+
+    unsigned int i, j;
+    double sum, sv;
+    for(j = 0; j < n; j++) 
+    {
+        sum = 0;
+        for(i = 0; i < n; i++) 
+        {
+            sum += L->A[i][j] * L->A[i][j];
+        }
+        sv = sqrt(sum);
+        sing_val[j].value = sv;
+        sing_val[j].index = j;
+
+        // normalize the column
+        for(i = 0; i < n; i++) 
+        {
+            L->A[i][j] /= sv;
+        }
+    }
+
+    // sort the singular values
+    qsort(sing_val, n, sizeof(singular_value), compare);
+    return sing_val;
+}
+
+//-----------------------------------------------------------------------
 //      Implementation of matriix funciton
 //-----------------------------------------------------------------------
 matrix* new_matrix(unsigned int rows, unsigned int cols, double* a) {
@@ -244,73 +311,6 @@ void print_matrix(matrix* m) {
 }
 
 //-----------------------------------------------------------------------
-//      Implementation of jacobi-algorithm funciton
-//-----------------------------------------------------------------------
-jacobi_param jacobi_parameters(double a_pp, double a_pq, double a_qq) {
-    jacobi_param jac = {0., 0., 0.};
-
-    double t = (a_pp - a_qq) / (2. * a_pq);
-    jac.t = sign(t) / ( fabs(t) + sqrt(1 + t*t) );
-    jac.c = 1 / sqrt(1 + jac.t*jac.t);
-    jac.s = (jac.c * jac.t);
-
-    return jac;
-}
-
-//-----------------------------------------------------------------------
-void rotate(matrix* L, unsigned int p, unsigned int q, matrix* R) {
-    // compute the jacobi rotation parameters
-    double u_pp = sum_entry(L, p, p);
-    double u_pq = sum_entry(L, p, q);
-    double u_qq = sum_entry(L, q, q);
-    jacobi_param jac = jacobi_parameters(u_pp, u_pq, u_qq);
-
-    // update columns p and q of M,U
-    int k; double temp;
-    for(k = 0; k < L->rows; k++)
-    {
-        temp = L->A[k][p];
-        L->A[k][p] = jac.s * L->A[k][q] + jac.c * temp;
-        L->A[k][q] = jac.c * L->A[k][q] - jac.s * temp;
-
-        temp = R->A[k][p];
-        R->A[k][p] = jac.s * R->A[k][q] + jac.c * temp;
-        R->A[k][q] = jac.c * R->A[k][q] - jac.s * temp;
-
-    }
-}
-
-//-----------------------------------------------------------------------
-singular_value* singular_values(matrix* L) {
-    unsigned int n = L->rows;
-    singular_value* sing_val = malloc(sizeof(singular_value) * n);
-
-    unsigned int i, j;
-    double sum, sv;
-    for(j = 0; j < n; j++) 
-    {
-        sum = 0;
-        for(i = 0; i < n; i++) 
-        {
-            sum += L->A[i][j] * L->A[i][j];
-        }
-        sv = sqrt(sum);
-        sing_val[j].value = sv;
-        sing_val[j].index = j;
-
-        // normalize the column
-        for(i = 0; i < n; i++) 
-        {
-            L->A[i][j] /= sv;
-        }
-    }
-
-    // sort the singular values
-    qsort(sing_val, n, sizeof(singular_value), compare);
-    return sing_val;
-}
-
-//-----------------------------------------------------------------------
 //      Implementation of utility functions
 //-----------------------------------------------------------------------
 
@@ -349,6 +349,9 @@ double sum_entry(matrix* M, unsigned int i, unsigned int j) {
     return sum;
 }
 
+//-----------------------------------------------------------------------
+//      Test Functions
+//-----------------------------------------------------------------------
 void test_jacobi() {
     printf("//------------------------------------------------------------------\n");
     printf("Testing Jacobi Algorithm\n");
