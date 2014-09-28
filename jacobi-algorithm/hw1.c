@@ -47,6 +47,7 @@ void print_matrix(matrix* m);
 //      Pre declarations of utility functions
 //-----------------------------------------------------------------------
 double sign(double val);
+void bsort(singular_value* data, size_t nitems);
 int compare(const void* a, const void* b);
 double sum_entry(matrix* M, unsigned int i, unsigned int j);
 
@@ -227,7 +228,7 @@ singular_value* singular_values(matrix* L) {
     }
 
     // sort the singular values
-    qsort(sing_val, n, sizeof(singular_value), compare);
+    bsort(sing_val, n);
     return sing_val;
 }
 
@@ -313,6 +314,26 @@ void print_matrix(matrix* m) {
 //-----------------------------------------------------------------------
 //      Implementation of utility functions
 //-----------------------------------------------------------------------
+
+//-----------------------------------------------------------------------
+void bsort(singular_value* data, size_t nitems) // standard bubble sort
+{
+    unsigned int i;
+    unsigned int swapped = 1;
+    while(swapped) {
+        swapped = 0;
+        for(i = 0; i < nitems; i++) 
+        {
+            if( data[i].value < data[i+1].value )  
+            {
+                singular_value tmp = data[i];
+                data[i] = data[i+1];
+                data[i+1] = tmp;
+                swapped = 1;
+            }
+        }
+    }
+}
 
 //-----------------------------------------------------------------------
 double sign(double val) {
