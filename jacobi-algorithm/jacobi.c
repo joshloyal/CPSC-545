@@ -40,13 +40,14 @@ typedef struct singular_value {
 //-----------------------------------------------------------------------
 matrix* new_matrix(unsigned int rows, unsigned int cols, double* a);
 void free_matrix(matrix* M); 
+matrix* eye(unsigned int n);
 void print_matrix(matrix* m);
 
 //-----------------------------------------------------------------------
 //      Pre declarations of utility functions
 //-----------------------------------------------------------------------
 double sign(double val);
-matrix* eye(unsigned int n);
+int compare(const void* a, const void* b);
 double sum_entry(matrix* M, unsigned int i, unsigned int j);
 
 //-----------------------------------------------------------------------
@@ -55,24 +56,116 @@ double sum_entry(matrix* M, unsigned int i, unsigned int j);
 void jacobi(double* a, int n, double* s, double* u, double* v);
 jacobi_param jacobi_parameters(double a_pp, double a_pq, double a_qq);
 void rotate(matrix* L, unsigned int p, unsigned int q, matrix* R);
+singular_value* singular_values(matrix* L);
 
 //-----------------------------------------------------------------------
 //      Pre declarations of test functions
 //-----------------------------------------------------------------------
-void test_jac_rot();
 void test_jacobi();
 
 //-----------------------------------------------------------------------
 //      Main funciton
 //-----------------------------------------------------------------------
 int main(int argc, char *argv[]) {
-    test_jac_rot();
     test_jacobi();
     return 0;
 }
 
 //-----------------------------------------------------------------------
-//      Implementation of matrix funciton
+//      Jacobi Algorithm
+//-----------------------------------------------------------------------
+/**
+    Implements the Jacobi algorithm for the SVD of a real matrix
+    
+    input parameters:
+    @param a the nxn matrix to be diagonalized, given as an nxn array;
+             will ge destroyed by the subroutine.
+    @param n the dimensionality of the matrix
+
+    output parameters:
+    @param s the spectrum of the matrix a, in order of decreasing values,
+             given as an array of length n
+    @param u the left singular values of the matrix a, as an nxn array
+    @param v the right singular values of the matrix a, given as an nxn array
+*/
+void jacobi(double* a, int n, double* s, double* u, double* v) {
+    // paramaters
+    unsigned int i, j, nullspace = 0;
+    double epsilon = 1e-15, comparison;
+    int iter_max = 100000, iters = 0, count = 1;
+
+    matrix* L = new_matrix(n, n, a); // -> matrix columns are left singular vectors
+    matrix* R = eye(n); // -> matrix whose columns are right singular vectors
+    
+    // begin performing jacobi rotations
+    while( (count != 0) && (iters < iter_max) ) { 
+
+        // loop through all pairs i < j
+        count = 0;
+        for (i = 0; i < (n - 1); i++) 
+        {
+            for( j = i + 1; j < n; j++)  
+            {
+                comparison = epsilon * sqrt(sum_entry(L,i,i) * sum_entry(L,j,j));
+                if( fabs(sum_entry(L,i,j)) > comparison) 
+                {
+                    rotate(L, i, j, R);
+                    count++;
+                }
+            }
+        }
+        iters++;
+    }
+    
+    // print information about the algorithm
+    if (iters == iter_max) 
+    {
+        printf("\nJacobi's Method failed to converge. Terminating\n");
+        return;
+    }
+    else
+    {
+        printf("\nJacobi's method converged in %i iterations.\n", iters);
+    }
+
+    // extract the singular values:
+    //      non-zero norms of column vectors of both L and R (we use L)
+    singular_value* sigma;
+    sigma = singular_values(L);
+    printf("\nThe singular values > 1.0e-15 are the following:\n\n");
+    for (i = 0; i < n; i++) // fill output params s,u,v
+    {
+        for (j = 0; j < n; j++) // order u,v properly
+        {
+            u[i * n + j] = L->A[i][sigma[j].index];
+            v[i * n + j] = R->A[i][sigma[j].index];
+        }
+        s[i] = sigma[i].value;
+        if (sigma[i].value > 1e-15)
+        {
+            printf("%e   ", sigma[i].value);
+        }
+        else
+        {
+            ++nullspace;
+        }
+    }
+    if (nullspace > 0)
+    {
+        printf("\n\nThe nullspace of the input matrix is non-zero. n = %i, and rank(A) is %i (rank-nullity).", n, n - nullspace);
+    }
+    printf("\n\nThe following is the matrix decomposition:\n");
+    printf("matrix U:\n");
+    matrix* U = new_matrix(n,n,u);
+    print_matrix(U);
+    printf("matrix V:\n");
+    matrix* V = new_matrix(n,n,v);
+    print_matrix(V);
+
+}
+
+//-----------------------------------------------------------------------
+//      Implementation of matriix funciton
 //-----------------------------------------------------------------------
 matrix* new_matrix(unsigned int rows, unsigned int cols, double* a) {
     matrix* M;
@@ -120,6 +213,39 @@ void free_matrix(matrix* M) {
 }
 
 //-----------------------------------------------------------------------
+matrix* eye(unsigned int n) {
+    matrix* I = new_matrix(n, n, NULL);
+    int i, j;
+    for(i = 0; i < n; i++) {
+        for(j = 0; j < n; j++) {
+            if (i != j ) {
+                I->A[i][j] = 0.;
+            }
+            else {
+                I->A[i][j] = 1.;
+            }
+        }
+    }
+
+    return I;
+}
+
+//-----------------------------------------------------------------------
+void print_matrix(matrix* m) {
+    int i, j;
+    for(i = 0; i < m->rows; i++ ) {
+        printf("| ");
+        for(j = 0; j < m->cols; j++) {
+            printf("%f ", m->A[i][j]);
+        }
+        printf("|\n");
+    }
+    printf("\n");
+}
+
+//-----------------------------------------------------------------------
+//      Implementation of jacobi-algorithm funciton
+//-----------------------------------------------------------------------
 jacobi_param jacobi_parameters(double a_pp, double a_pq, double a_qq) {
     jacobi_param jac = {0., 0., 0.};
 
@@ -155,6 +281,40 @@ void rotate(matrix* L, unsigned int p, unsigned int q, matrix* R) {
 }
 
 //-----------------------------------------------------------------------
+singular_value* singular_values(matrix* L) {
+    unsigned int n = L->rows;
+    singular_value* sing_val = malloc(sizeof(singular_value) * n);
+
+    unsigned int i, j;
+    double sum, sv;
+    for(j = 0; j < n; j++) 
+    {
+        sum = 0;
+        for(i = 0; i < n; i++) 
+        {
+            sum += L->A[i][j] * L->A[i][j];
+        }
+        sv = sqrt(sum);
+        sing_val[j].value = sv;
+        sing_val[j].index = j;
+
+        // normalize the column
+        for(i = 0; i < n; i++) 
+        {
+            L->A[i][j] /= sv;
+        }
+    }
+
+    // sort the singular values
+    qsort(sing_val, n, sizeof(singular_value), compare);
+    return sing_val;
+}
+
+//-----------------------------------------------------------------------
+//      Implementation of utility functions
+//-----------------------------------------------------------------------
+
+//-----------------------------------------------------------------------
 double sign(double val) {
     if ( val < 0 ) {
         return -1;
@@ -163,21 +323,19 @@ double sign(double val) {
 }
 
 //-----------------------------------------------------------------------
-matrix* eye(unsigned int n) {
-    matrix* I = new_matrix(n, n, NULL);
-    int i, j;
-    for(i = 0; i < n; i++) {
-        for(j = 0; j < n; j++) {
-            if (i != j ) {
-                I->A[i][j] = 0.;
-            }
-            else {
-                I->A[i][j] = 1.;
-            }
-        }
+int compare(const void* a, const void* b) {
+    if ((*(singular_value*)a).value > (*(singular_value*)b).value)
+    {
+        return -1;
     }
-
-    return I;
+    if ((*(singular_value*)a).value == (*(singular_value*)b).value)
+    {
+        return 0;
+    }
+    if ((*(singular_value*)a).value < (*(singular_value*)b).value)
+    {
+        return 1;
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -189,92 +347,6 @@ double sum_entry(matrix* M, unsigned int i, unsigned int j) {
         sum += M->A[k][i] * M->A[k][j];
     }
     return sum;
-}
-
-//-----------------------------------------------------------------------
-void print_matrix(matrix* m) {
-    int i, j;
-    for(i = 0; i < m->rows; i++ ) {
-        printf("| ");
-        for(j = 0; j < m->cols; j++) {
-            printf("%f ", m->A[i][j]);
-        }
-        printf("|\n");
-    }
-    printf("\n");
-}
-
-//-----------------------------------------------------------------------
-/**
-    Implements the Jacobi algorithm for the SVD of a real matrix
-    
-    input parameters:
-    @param a the nxn matrix to be diagonalized, given as an nxn array;
-             will ge destroyed by the subroutine.
-    @param n the dimensionality of the matrix
-
-    output parameters:
-    @param s the spectrum of the matrix a, in order of decreasing values,
-             given as an array of length n
-    @param u the left singular values of the matrix a, as an nxn array
-    @param v the right singular values of the matrix a, given as an nxn array
-*/
-void jacobi(double* a, int n, double* s, double* u, double* v) {
-    // paramaters
-    int i, j;
-    double epsilon = 1e-15, comparison;
-    int iter_max = 100000, iters = 0, count = 1;
-
-    matrix* L = new_matrix(n, n, a); // -> matrix columns are left singular vectors
-    matrix* R = eye(n); // -> matrix whose columns are right singular vectors
-    
-    // begin performing jacobi rotations
-    while( (count != 0) && (iters < iter_max) ) { 
-
-        // loop through all pairs i < j
-        count = 0;
-        for (i = 0; i < (n - 1); i++) 
-        {
-            for( j = i + 1; j < n; j++)  
-            {
-                comparison = epsilon * sqrt(sum_entry(L,i,i) * sum_entry(L,j,j));
-                if( fabs(sum_entry(L,i,j)) > comparison) 
-                {
-                    rotate(L, i, j, R);
-                    count++;
-                }
-            }
-        }
-        iters++;
-    }
-    
-    // print information about the algorithm
-    if (iters == iter_max) 
-    {
-        printf("\nJacobi's Method failed to converge. Terminating\n");
-        return;
-    }
-    else
-    {
-        printf("\nJacobi's method converged in %i iterations.\n", iters);
-    }
-
-    // extract the singular values:
-    //      left svds: norms of columns of L
-    //      right svds: norms of columns of R
-}
-
-
-
-//-----------------------------------------------------------------------
-//     Implementation of test functions 
-//-----------------------------------------------------------------------
-void test_jac_rot() {
-    printf("//------------------------------------------------------------------\n");
-    printf("Testing Jacobi rotation\n");
-    printf("//------------------------------------------------------------------\n");
-    jacobi_param jac = jacobi_parameters(2,4,3);
-    printf("t = %f, s = %f, c = %f\n", jac.t, jac.s, jac.c);
 }
 
 void test_jacobi() {
