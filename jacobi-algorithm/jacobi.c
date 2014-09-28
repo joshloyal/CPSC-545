@@ -8,62 +8,74 @@
 //      the implementation of storing the numbers in a single contigent
 //      row-major ordered array.
 //-----------------------------------------------------------------------
-struct Matrix {
+typedef struct Matrix {
     
     unsigned int rows, cols; // row and column dimensions of the matrix
     double* raw;             // the 'raw pointer' to the matrix elements
     double* *A;              // pointer to an array of pointers to rows
-};
-typedef struct Matrix Matrix;
+} Matrix;
 
 //-----------------------------------------------------------------------
 //  Jacobi Structure :
 //      Hold jacobi rotation parameters
 //-----------------------------------------------------------------------
-struct Jacobi {
+typedef struct Jacobi {
     double t;   // tangent
     double c;   // cosine 
     double s;   // sine
-};
-typedef struct Jacobi Jacobi;
+} Jacobi;
 
+//-----------------------------------------------------------------------
+//  Singular Value Structure :
+//      Holds singular values and their index in U,V 
+//      (note: we re-order the singular values by size, so
+//             U,V need to be re-ordered accordingly)
+//-----------------------------------------------------------------------
+typedef struct singular_value {
+    unsigned int index;
+    double value;
+} singular_value;
 
 //-----------------------------------------------------------------------
 //      Pre declarations of matrix functions
 //-----------------------------------------------------------------------
-Matrix* new_matrix(unsigned int rows, unsigned int cols);
+Matrix* new_matrix(unsigned int rows, unsigned int cols, double* a);
 void free_matrix(Matrix* M); 
-Matrix* multiply_matrix(Matrix* A, Matrix* B);
-Matrix* transpose(Matrix* M);
-Jacobi jacobi_rotation(double a_pp, double a_pq, double a_qq);
 void print_matrix(Matrix* m);
 
 //-----------------------------------------------------------------------
 //      Pre declarations of utility functions
 //-----------------------------------------------------------------------
 double sign(double val);
+Matrix* eye(unsigned int n);
+double sum_entry(Matrix* M, unsigned int i, unsigned int j);
+
+//-----------------------------------------------------------------------
+//      Pre declarations of jacobi-algorithm functions
+//-----------------------------------------------------------------------
+void jacobi(double* a, int n, double* s, double* u, double* v);
+Jacobi jacobi_parameters(double a_pp, double a_pq, double a_qq);
+void rotate(Matrix* L, unsigned int p, unsigned int q, Matrix* R);
 
 //-----------------------------------------------------------------------
 //      Pre declarations of test functions
 //-----------------------------------------------------------------------
-void test_multi();
-void test_trans();
 void test_jac_rot();
+void test_jacobi();
 
 //-----------------------------------------------------------------------
 //      Main funciton
 //-----------------------------------------------------------------------
 int main(int argc, char *argv[]) {
-    test_multi();
-    test_trans();
     test_jac_rot();
+    test_jacobi();
     return 0;
 }
 
 //-----------------------------------------------------------------------
 //      Implementation of matrix funciton
 //-----------------------------------------------------------------------
-Matrix* new_matrix(unsigned int rows, unsigned int cols) {
+Matrix* new_matrix(unsigned int rows, unsigned int cols, double* a) {
     Matrix* M;
     int i;
 
@@ -75,7 +87,12 @@ Matrix* new_matrix(unsigned int rows, unsigned int cols) {
     M->cols = cols;
 
     // make the raw array with malloc
-    M->raw = malloc( rows*cols * sizeof(double) );
+    if( a == NULL ) {
+        M->raw = malloc( rows*cols * sizeof(double) );
+    }
+    else {
+        M->raw = a;
+    } 
     if (M->raw == NULL) {
         free(M);
         return NULL;
@@ -104,67 +121,38 @@ void free_matrix(Matrix* M) {
 }
 
 //-----------------------------------------------------------------------
-Matrix* multiply_matrix(Matrix* A, Matrix* B) {
-    unsigned int n, m, p;
-    double sum;
-    Matrix* C;
-    
-    if( A->cols != B->rows ) {
-        printf("Dimension mismatch when multiplying matrices!\n", stderr);
-        return NULL;
-    }
+Jacobi jacobi_parameters(double a_pp, double a_pq, double a_qq) {
+    Jacobi jac = {0., 0., 0.};
 
-    n = A->rows;
-    m = A->cols;
-    p = B->cols; 
-    C = new_matrix(n,p);
-    if( C != NULL ) {
-        unsigned int i,j,k; 
-        for(i = 0; i < n; i++) {
-            for(j = 0; j < p; j++) {
-                sum = 0;
-                for(k = 0; k < m; k++) {
-                    sum = sum + A->A[i][k] * B->A[k][j];
-                }
-                C->A[i][j] = sum;
-            }
-        }
-    }
-    
-    return C;
-}
+    double t = (a_pp - a_qq) / (2. * a_pq);
+    jac.t = sign(t) / ( fabs(t) + sqrt(1 + t*t) );
+    jac.c = 1 / sqrt(1 + jac.t*jac.t);
+    jac.s = (jac.c * jac.t);
 
-/* just invert coordinates... */
-Matrix* transpose(Matrix* M) {
-    unsigned int rows, cols;
-    Matrix* Mt;
-
-    rows = M->rows;
-    cols = M->cols;
-    Mt = new_matrix(cols, rows); // flip rows and cols
-
-    if ( Mt != NULL ) {
-        unsigned int i, j;
-        for (i = 0; i < rows; i++) {
-            for (j = 0; j < cols; j++) {
-                Mt->A[j][i] = M->A[i][j];
-            }
-        }
-    }
-
-    return Mt;
+    return jac;
 }
 
 //-----------------------------------------------------------------------
-Jacobi jacobi_rotation(double a_pp, double a_pq, double a_qq) {
-    Jacobi jac = {0., 0., 0.};
+void rotate(Matrix* L, unsigned int p, unsigned int q, Matrix* R) {
+    // compute the jacobi rotation parameters
+    double u_pp = sum_entry(L, p, p);
+    double u_pq = sum_entry(L, p, q);
+    double u_qq = sum_entry(L, q, q);
+    Jacobi jac = jacobi_parameters(u_pp, u_pq, u_qq);
 
-    double t = (a_qq - a_pp) / (2. * a_pq);
-    jac.t = sign(t) / ( fabs(t) + sqrt(1 + t*t) );
-    jac.c = 1 / sqrt(1 + jac.t*jac.t);
-    jac.s = jac.c * jac.t;
+    // update columns p and q of M,U
+    int k; double temp;
+    for(k = 0; k < L->rows; k++)
+    {
+        temp = L->A[k][p];
+        L->A[k][p] = jac.s * L->A[k][q] + jac.c * temp;
+        L->A[k][q] = jac.c * L->A[k][q] - jac.s * temp;
 
-    return jac;
+        temp = R->A[k][p];
+        R->A[k][p] = jac.s * R->A[k][q] + jac.c * temp;
+        R->A[k][q] = jac.c * R->A[k][q] - jac.s * temp;
+
+    }
 }
 
 //-----------------------------------------------------------------------
@@ -176,7 +164,32 @@ double sign(double val) {
 }
 
 //-----------------------------------------------------------------------
-void rotate(Matrix* M) {
+Matrix* eye(unsigned int n) {
+    Matrix* I = new_matrix(n, n, NULL);
+    int i, j;
+    for(i = 0; i < n; i++) {
+        for(j = 0; j < n; j++) {
+            if (i != j ) {
+                I->A[i][j] = 0.;
+            }
+            else {
+                I->A[i][j] = 1.;
+            }
+        }
+    }
+
+    return I;
+}
+
+//-----------------------------------------------------------------------
+double sum_entry(Matrix* M, unsigned int i, unsigned int j) {
+    int k;
+    double sum = 0;
+    for(k = 0; k < M->rows; k++) 
+    {
+        sum += M->A[k][i] * M->A[k][j];
+    }
+    return sum;
 }
 
 //-----------------------------------------------------------------------
@@ -193,69 +206,100 @@ void print_matrix(Matrix* m) {
 }
 
 //-----------------------------------------------------------------------
+/**
+    Implements the Jacobi algorithm for the SVD of a real matrix
+    
+    input parameters:
+    @param a the nxn matrix to be diagonalized, given as an nxn array;
+             will ge destroyed by the subroutine.
+    @param n the dimensionality of the matrix
+
+    output parameters:
+    @param s the spectrum of the matrix a, in order of decreasing values,
+             given as an array of length n
+    @param u the left singular values of the matrix a, as an nxn array
+    @param v the right singular values of the matrix a, given as an nxn array
+*/
+void jacobi(double* a, int n, double* s, double* u, double* v) {
+    // paramaters
+    int i, j;
+    double epsilon = 1e-15, comparison;
+    int iter_max = 100000, iters = 0, count = 1;
+
+    Matrix* L = new_matrix(n, n, a); // -> matrix columns are left singular vectors
+    Matrix* R = eye(n); // -> matrix whose columns are right singular vectors
+    
+    // begin performing jacobi rotations
+    while( (count != 0) && (iters < iter_max) ) { 
+
+        // loop through all pairs i < j
+        count = 0;
+        for (i = 0; i < (n - 1); i++) 
+        {
+            for( j = i + 1; j < n; j++)  
+            {
+                comparison = epsilon * sqrt(sum_entry(L,i,i) * sum_entry(L,j,j));
+                if( fabs(sum_entry(L,i,j)) > comparison) 
+                {
+                    rotate(L, i, j, R);
+                    count++;
+                }
+            }
+        }
+        iters++;
+    }
+    
+    // print information about the algorithm
+    if (iters == iter_max) 
+    {
+        printf("\nJacobi's Method failed to converge. Terminating\n");
+        return;
+    }
+    else
+    {
+        printf("\nJacobi's method converged in %i iterations.\n", iters);
+    }
+
+    // extract the singular values:
+    //      left svds: norms of columns of L
+    //      right svds: norms of columns of R
+}
+
+
+
+//-----------------------------------------------------------------------
 //     Implementation of test functions 
 //-----------------------------------------------------------------------
-void test_multi() {
-    printf("//------------------------------------------------------------------\n");
-    printf("Testing Matrix Multiplication\n");
-    printf("//------------------------------------------------------------------\n");
-    Matrix* A;
-    Matrix* B;
-    Matrix* C;
-
-    A = new_matrix(2,2);
-    B = new_matrix(2,3);
-
-    A->A[0][0] = 1;
-    A->A[0][1] = 2;
-    A->A[1][0] = 3;
-    A->A[1][1] = 4;
-
-    B->A[0][0] = 5;
-    B->A[0][1] = 6;
-    B->A[0][2] = 7;
-    B->A[1][0] = 8;
-    B->A[1][1] = 9;
-    B->A[1][2] = 10;
-
-    C = multiply_matrix(A,B);
-
-    print_matrix(C); 
-
-    free_matrix(A); free_matrix(B); free_matrix(C);
-}
-
-void test_trans() {
-    printf("//------------------------------------------------------------------\n");
-    printf("Testing Transpose\n");
-    printf("//------------------------------------------------------------------\n");
-    
-    Matrix* M;
-    Matrix* Mt;
-
-    M = new_matrix(3,3);
-    
-    M->A[0][0] = 5;
-    M->A[0][1] = 6;
-    M->A[0][2] = 7;
-    M->A[1][0] = 8;
-    M->A[1][1] = 9;
-    M->A[1][2] = 10;
-    M->A[2][0] = 10;
-    M->A[2][1] = 11;
-    M->A[2][2] = 12;
-
-    Mt = transpose(M);
-    print_matrix(M);
-    print_matrix(Mt);
-
-    free_matrix(M); free_matrix(Mt);
-}
-
 void test_jac_rot() {
     printf("//------------------------------------------------------------------\n");
     printf("Testing Jacobi rotation\n");
     printf("//------------------------------------------------------------------\n");
-    Jacobi jac = jacobi_rotation(2,4,3);
+    Jacobi jac = jacobi_parameters(2,4,3);
     printf("t = %f, s = %f, c = %f\n", jac.t, jac.s, jac.c);
+}
+
+void test_jacobi() {
+    printf("//------------------------------------------------------------------\n");
+    printf("Testing Jacobi Algorithm\n");
+    printf("//------------------------------------------------------------------\n");
+    unsigned int n = 3.;
+    double* m = malloc( sizeof(double)*n*n );
+    m[0] = 1.;
+    m[1] = 3.;
+    m[2] = 2.;
+    m[3] = 5.;
+    m[4] = 6.;
+    m[5] = 4.;
+    m[6] = 7.;
+    m[7] = 8.;
+    m[8] = 9.;
+    Matrix* M = new_matrix(n,n,m);
+
+    printf("Matrix M:\n");
+    print_matrix(M);
+
+    double* s = malloc( sizeof(double)*3 );
+    double* u = malloc( sizeof(double)*9 );
+    double* v = malloc( sizeof(double)*9 );
+    jacobi(m, n, s, u, v);
 }
