@@ -48,7 +48,6 @@ void print_matrix(matrix* m);
 //-----------------------------------------------------------------------
 double sign(double val);
 void bsort(singular_value* data, size_t nitems);
-int compare(const void* a, const void* b);
 double sum_entry(matrix* M, unsigned int i, unsigned int j);
 
 //-----------------------------------------------------------------------
@@ -341,22 +340,6 @@ double sign(double val) {
         return -1;
     }
     return 1;
-}
-
-//-----------------------------------------------------------------------
-int compare(const void* a, const void* b) {
-    if ((*(singular_value*)a).value > (*(singular_value*)b).value)
-    {
-        return -1;
-    }
-    if ((*(singular_value*)a).value == (*(singular_value*)b).value)
-    {
-        return 0;
-    }
-    if ((*(singular_value*)a).value < (*(singular_value*)b).value)
-    {
-        return 1;
-    }
 }
 
 //-----------------------------------------------------------------------
